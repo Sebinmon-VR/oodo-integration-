@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Confirm Order - Odoo Integration{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-file-alt"></i> Parsed Document Data</h5>
+            </div>
+            <div class="card-body">
+                {% if parsed_data %}
+                <table class="table table-borderless">
+                    <tr>
+                        <td><strong>Vendor:</strong></td>
+                        <td>{{ parsed_data.get('vendor', 'Not found') }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Invoice/PO Number:</strong></td>
+                        <td>{{ parsed_data.get('invoice_number', 'Not found') }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Date:</strong></td>
+                        <td>{{ parsed_data.get('date', 'Not found') }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Total:</strong></td>
+                        <td>{{ parsed_data.get('currency', '$') }} {{ parsed_data.get('total', 0) }}</td>
+                    </tr>
+                </table>
+
+                <h6><i class="fas fa-list"></i> Products Found in Text:</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Qty</th>
+                                <th>Price</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for product in parsed_data.get('products', []) %}
+                            <tr>
+                                <td>{{ product.get('name') }}</td>
+                                <td>{{ product.get('quantity') }}</td>
+                                <td>${{ product.get('price', 0) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-check-circle"></i> Available Products in Database</h5>
+            </div>
+            <div class="card-body">
+                {% if validated_data %}
+                <table class="table table-borderless">
+                    <tr>
+                        <td><strong>Vendor Status:</strong></td>
+                        <td>
+                            {% if validated_data.get('vendor_id') %}
+                                <span class="badge bg-success">Found in Database</span>
+                            {% else %}
+                                <span class="badge bg-warning">Will Create New</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Products Available:</strong></td>
+                        <td><span class="badge bg-info">{{ validated_data.get('products', [])|length }} items</span></td>
+                    </tr>
+                </table>
+
+                <h6><i class="fas fa-shopping-cart"></i> Products for Order:</h6>
+                <div style="max-height: 300px; overflow-y: auto;">
+                    {% for product in validated_data.get('products', []) %}
+                    <div class="col-12 mb-2">
+                        <div class="card card-body p-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>{{ product.get('name') }}</strong>
+                                    {% if product.get('code') %}
+                                    <br><small class="text-muted">Code: {{ product.get('code') }}</small>
+                                    {% endif %}
+                                    <br><small>Qty: {{ product.get('quantity') }} | Price: ${{ "%.2f"|format(product.get('price', 0)) }}</small>
+                                </div>
+                                <button class="btn btn-sm btn-outline-primary" 
+                                        onclick="addToCart({id: {{ product.get('id') }}, name: '{{ product.get('name')|replace("'", "\\'") }}', quantity: {{ product.get('quantity') }}, price: {{ product.get('price') }}})">
+                                    <i class="fas fa-cart-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="mt-3">
+                    <form method="POST" action="/create" class="d-grid gap-2">
+                        <input type="hidden" name="validated_data" value="{{ validated_data|tojson|escape }}">
+                        <button type="submit" name="create_type" value="po" class="btn btn-primary">
+                            <i class="fas fa-file-invoice"></i> Create Purchase Order ({{ validated_data.get('products', [])|length }} items)
+                        </button>
+                        <button type="submit" name="create_type" value="invoice" class="btn btn-success">
+                            <i class="fas fa-receipt"></i> Create Invoice ({{ validated_data.get('products', [])|length }} items)
+                        </button>
+                    </form>
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i> No products could be validated against the database.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Add some visual feedback when buttons are clicked
+document.querySelectorAll('button[name="create_type"]').forEach(button => {
+    button.addEventListener('click', function() {
+        this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+        this.disabled = true;
+    });
+});
+</script>
+{% endblock %}

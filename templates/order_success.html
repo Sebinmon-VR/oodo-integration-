@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block title %}Order Created Successfully - Odoo Integration{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card border-success">
+            <div class="card-header {% if order.get('is_simulation') %}bg-warning{% else %}bg-success{% endif %} text-white text-center">
+                <h3 class="mb-0">
+                    <i class="fas fa-check-circle"></i> 
+                    {% if order.type == 'po' %}Purchase Order{% else %}Invoice{% endif %} 
+                    {% if order.get('is_simulation') %}Simulated{% else %}Created{% endif %} Successfully!
+                </h3>
+            </div>
+            <div class="card-body">
+                <!-- Order Summary -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header {% if order.get('is_simulation') %}bg-warning{% else %}bg-primary{% endif %} text-white">
+                                <h5 class="mb-0"><i class="fas fa-info-circle"></i> Order Details</h5>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-borderless">
+                                    <tr>
+                                        <td><strong>Order ID:</strong></td>
+                                        <td>#{{ order.id }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Type:</strong></td>
+                                        <td>
+                                            {% if order.type == 'po' %}
+                                                <span class="badge bg-primary">Purchase Order</span>
+                                            {% else %}
+                                                <span class="badge bg-success">Invoice</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Vendor:</strong></td>
+                                        <td>{{ order.vendor_name }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Date Created:</strong></td>
+                                        <td>{{ order.date_created }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Status:</strong></td>
+                                        <td>
+                                            {% if order.get('is_simulation') %}
+                                                <span class="badge bg-warning">{{ order.status }}</span>
+                                            {% else %}
+                                                <span class="badge bg-success">Created in Odoo</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% if order.invoice_number %}
+                                    <tr>
+                                        <td><strong>Reference:</strong></td>
+                                        <td>{{ order.invoice_number }}</td>
+                                    </tr>
+                                    {% endif %}
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header bg-info text-white">
+                                <h5 class="mb-0"><i class="fas fa-calculator"></i> Order Summary</h5>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-borderless">
+                                    <tr>
+                                        <td><strong>Total Items:</strong></td>
+                                        <td>{{ order.products|length }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Total Quantity:</strong></td>
+                                        <td>{{ order.products|sum(attribute='quantity') }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Currency:</strong></td>
+                                        <td>{{ order.currency }}</td>
+                                    </tr>
+                                    <tr class="border-top">
+                                        <td><strong>Total Amount:</strong></td>
+                                        <td><h5 class="text-success">${{ "%.2f"|format(order.total_amount) }}</h5></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Products Table -->
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0"><i class="fas fa-list"></i> Order Items</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Product Name</th>
+                                        <th>Product Code</th>
+                                        <th>Quantity</th>
+                                        <th>Unit Price</th>
+                                        <th>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for product in order.products %}
+                                    <tr>
+                                        <td>{{ loop.index }}</td>
+                                        <td>{{ product.name }}</td>
+                                        <td>
+                                            {% if product.code %}
+                                                <code>{{ product.code }}</code>
+                                            {% else %}
+                                                <span class="text-muted">N/A</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ product.quantity }}</td>
+                                        <td>${{ "%.2f"|format(product.price) }}</td>
+                                        <td>${{ "%.2f"|format(product.price * product.quantity) }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                                <tfoot>
+                                    <tr class="table-success">
+                                        <th colspan="5">Total Amount</th>
+                                        <th>${{ "%.2f"|format(order.total_amount) }}</th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="row mt-4">
+                    <div class="col-md-12 text-center">
+                        <div class="btn-group" role="group">
+                            <a href="{{ url_for('index') }}" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> Create Another Order
+                            </a>
+                            <button class="btn btn-secondary" onclick="window.print()">
+                                <i class="fas fa-print"></i> Print Order
+                            </button>
+                            <a href="{{ url_for('order_history') }}" class="btn btn-info">
+                                <i class="fas fa-history"></i> View History
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Status Notice -->
+                {% if order.get('is_simulation') %}
+                <div class="alert alert-warning mt-4" role="alert">
+                    <h6><i class="fas fa-exclamation-triangle"></i> Simulation Mode</h6>
+                    <p class="mb-0">
+                        This order was simulated because the Odoo connection failed or is in demo mode. 
+                        No actual data has been posted to the Odoo database.
+                    </p>
+                </div>
+                {% else %}
+                <div class="alert alert-success mt-4" role="alert">
+                    <h6><i class="fas fa-check-circle"></i> Successfully Created in Odoo</h6>
+                    <p class="mb-0">
+                        This order has been successfully created in your Odoo system with ID #{{ order.id }}.
+                        You can view it in your Odoo dashboard.
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Add order to localStorage for history
+let orderHistory = JSON.parse(localStorage.getItem('orderHistory') || '[]');
+orderHistory.push({
+    id: '{{ order.id }}',
+    type: '{{ order.type }}',
+    vendor: '{{ order.vendor_name }}',
+    date: '{{ order.date_created }}',
+    total: {{ order.total_amount }},
+    status: '{{ order.status }}',
+    is_simulation: {{ order.get('is_simulation', False)|lower }}
+});
+localStorage.setItem('orderHistory', JSON.stringify(orderHistory));
+</script>
+{% endblock %}

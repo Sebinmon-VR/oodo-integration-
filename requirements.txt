@@ -1,0 +1,6 @@
+flask
+openai==0.28
+python-dotenv
+Pillow
+tabulate
+requests
