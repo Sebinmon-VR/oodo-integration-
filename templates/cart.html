@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Shopping Cart - Odoo Integration{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="fas fa-shopping-cart"></i> Shopping Cart</h4>
+            </div>
+            <div class="card-body">
+                <div id="cart-items">
+                    <!-- Cart items will be populated by JavaScript -->
+                </div>
+                
+                <div class="text-center mt-4">
+                    <button class="btn btn-success" onclick="simulateOrder()" id="checkout-btn" style="display: none;">
+                        <i class="fas fa-credit-card"></i> Simulate Order
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="clearCart()">
+                        <i class="fas fa-trash"></i> Clear Cart
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function displayCart() {
+    const cartItems = document.getElementById('cart-items');
+    const checkoutBtn = document.getElementById('checkout-btn');
+    
+    if (cart.length === 0) {
+        cartItems.innerHTML = `
+            <div class="text-center text-muted">
+                <i class="fas fa-shopping-cart fa-3x mb-3"></i>
+                <h5>Your cart is empty</h5>
+                <p>Add some products to get started!</p>
+                <a href="{{ url_for('index') }}" class="btn btn-primary">
+                    <i class="fas fa-upload"></i> Extract Document
+                </a>
+            </div>
+        `;
+        checkoutBtn.style.display = 'none';
+        return;
+    }
+    
+    let total = 0;
+    let html = '<div class="table-responsive"><table class="table"><thead><tr><th>Product</th><th>Quantity</th><th>Price</th><th>Total</th><th>Action</th></tr></thead><tbody>';
+    
+    cart.forEach((item, index) => {
+        const itemTotal = item.quantity * item.price;
+        total += itemTotal;
+        html += `
+            <tr>
+                <td>${item.name}</td>
+                <td>${item.quantity}</td>
+                <td>$${item.price}</td>
+                <td>$${itemTotal.toFixed(2)}</td>
+                <td>
+                    <button class="btn btn-sm btn-danger" onclick="removeFromCart(${index})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += `</tbody><tfoot><tr><th colspan="3">Total</th><th>$${total.toFixed(2)}</th><th></th></tr></tfoot></table></div>`;
+    cartItems.innerHTML = html;
+    checkoutBtn.style.display = 'block';
+}
+
+function clearCart() {
+    cart = [];
+    localStorage.setItem('cart', JSON.stringify(cart));
+    updateCartCount();
+    displayCart();
+}
+
+function simulateOrder() {
+    if (cart.length === 0) return;
+    
+    // Simulate order creation
+    alert(`Order simulated successfully!\nTotal items: ${cart.length}\nTotal amount: $${cart.reduce((sum, item) => sum + (item.quantity * item.price), 0).toFixed(2)}`);
+    
+    // Clear cart after simulation
+    clearCart();
+}
+
+// Display cart on page load
+displayCart();
+</script>
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Order History - Odoo Integration{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="fas fa-history"></i> Order History</h4>
+            </div>
+            <div class="card-body">
+                <div id="order-history-content">
+                    <div class="text-center text-muted">
+                        <i class="fas fa-spinner fa-spin fa-3x mb-3"></i>
+                        <p>Loading order history...</p>
+                    </div>
+                </div>
+                
+                <div class="text-center mt-3">
+                    <button class="btn btn-outline-danger" onclick="clearHistory()">
+                        <i class="fas fa-trash"></i> Clear History
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function loadOrderHistory() {
+    const orderHistory = JSON.parse(localStorage.getItem('orderHistory') || '[]');
+    const content = document.getElementById('order-history-content');
+    
+    if (orderHistory.length === 0) {
+        content.innerHTML = `
+            <div class="text-center text-muted">
+                <i class="fas fa-inbox fa-3x mb-3"></i>
+                <h5>No Orders Found</h5>
+                <p>You haven't created any orders yet.</p>
+                <a href="{{ url_for('index') }}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Create First Order
+                </a>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '<div class="table-responsive"><table class="table table-striped"><thead><tr><th>Order ID</th><th>Type</th><th>Vendor</th><th>Date</th><th>Total</th><th>Status</th></tr></thead><tbody>';
+    
+    orderHistory.reverse().forEach(order => {
+        const typeLabel = order.type === 'po' ? 'Purchase Order' : 'Invoice';
+        const typeBadge = order.type === 'po' ? 'bg-primary' : 'bg-success';
+        
+        html += `
+            <tr>
+                <td>#${order.id}</td>
+                <td><span class="badge ${typeBadge}">${typeLabel}</span></td>
+                <td>${order.vendor}</td>
+                <td>${order.date}</td>
+                <td>$${order.total.toFixed(2)}</td>
+                <td><span class="badge bg-warning">${order.status}</span></td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table></div>';
+    content.innerHTML = html;
+}
+
+function clearHistory() {
+    if (confirm('Are you sure you want to clear all order history?')) {
+        localStorage.removeItem('orderHistory');
+        loadOrderHistory();
+    }
+}
+
+// Load history on page load
+loadOrderHistory();
+</script>
+{% endblock %}

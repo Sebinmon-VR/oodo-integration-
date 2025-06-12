@@ -1,0 +1,395 @@
+{% extends "base.html" %}
+
+{% block title %}Live Order Builder - Odoo Integration{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-plus-circle"></i> Build Your Order</h5>
+            </div>
+            <div class="card-body">
+                {% if validated_data %}
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <strong>Vendor:</strong> {{ validated_data.get('vendor_name', 'New Vendor') }}
+                        {% if validated_data.get('vendor_id') %}
+                        <span class="badge bg-success">Found</span>
+                        {% else %}
+                        <span class="badge bg-warning">New</span>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Currency:</strong> {{ validated_data.get('currency', 'USD') }}
+                        {% if validated_data.get('exchange_rate') and validated_data.get('exchange_rate') != 1 %}
+                        <br><small class="text-muted">Rate: 1 {{ validated_data.get('original_currency', 'USD') }} = {{ "%.4f"|format(validated_data.get('exchange_rate', 1)) }} {{ validated_data.get('currency', 'USD') }}</small>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Products Available:</strong> <span class="badge bg-info">{{ validated_data.get('products', [])|length }}</span>
+                    </div>
+                </div>
+
+                <h6><i class="fas fa-list"></i> Available Products:</h6>
+                <div style="max-height: 400px; overflow-y: auto;">
+                    {% for product in validated_data.get('products', []) %}
+                    <div class="card mb-2 product-card" id="product-{{ loop.index }}" data-product-index="{{ loop.index0 }}">
+                        <div class="card-body p-3">
+                            <div class="row align-items-center">
+                                <div class="col-md-6">
+                                    <strong>{{ product.get('name') }}</strong>
+                                    {% if product.get('code') %}
+                                    <br><small class="text-muted">Code: {{ product.get('code') }}</small>
+                                    {% endif %}
+                                    <br><small>Price: {{ validated_data.get('currency', 'USD') }} {{ "%.2f"|format(product.get('price', 0)) }}</small>
+                                    {% if product.get('original_price') and product.get('original_currency') != validated_data.get('currency') %}
+                                    <br><small class="text-muted">Original: {{ product.get('original_currency', 'USD') }} {{ "%.2f"|format(product.get('original_price', 0)) }}</small>
+                                    {% endif %}
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="input-group input-group-sm">
+                                        <button class="btn btn-outline-secondary" type="button" onclick="changeQuantity({{ loop.index0 }}, -1)">-</button>
+                                        <input type="number" class="form-control text-center" id="qty-{{ loop.index0 }}" value="0" min="0" max="999" onchange="updateQuantity({{ loop.index0 }})">
+                                        <button class="btn btn-outline-secondary" type="button" onclick="changeQuantity({{ loop.index0 }}, 1)">+</button>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <button class="btn btn-success btn-sm w-100" onclick="addToLiveOrder({{ loop.index0 }})" id="add-btn-{{ loop.index0 }}" disabled>
+                                        <i class="fas fa-plus"></i> Add
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card sticky-top">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-shopping-cart"></i> Live Order</h5>
+                <span class="badge bg-light text-dark" id="item-count">0 items</span>
+            </div>
+            <div class="card-body">
+                <div id="live-order-items" class="mb-3" style="max-height: 300px; overflow-y: auto;">
+                    <div class="text-center text-muted" id="empty-order">
+                        <i class="fas fa-shopping-cart fa-2x mb-2"></i>
+                        <p>No items in order yet</p>
+                        <small>Add products from the left panel</small>
+                    </div>
+                </div>
+
+                <div class="border-top pt-3">
+                    <div class="d-flex justify-content-between mb-2">
+                        <strong>Total Items:</strong>
+                        <span id="total-items">0</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <strong>Total Quantity:</strong>
+                        <span id="total-quantity">0</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-3">
+                        <strong>Total Amount:</strong>
+                        <strong class="text-success" id="total-amount">{{ validated_data.get('currency', 'USD') }} 0.00</strong>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary" onclick="createOrder('po')" id="create-po-btn" disabled>
+                            <i class="fas fa-file-invoice"></i> Create Purchase Order
+                        </button>
+                        <button class="btn btn-success" onclick="createOrder('invoice')" id="create-invoice-btn" disabled>
+                            <i class="fas fa-receipt"></i> Create Invoice
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="clearOrder()">
+                            <i class="fas fa-trash"></i> Clear Order
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Store product data and live order
+const products = {{ validated_data.get('products', [])|tojson }};
+const vendorData = {{ validated_data|tojson }};
+const currency = '{{ validated_data.get("currency", "USD") }}';
+let liveOrder = [];
+
+function changeQuantity(index, change) {
+    const qtyInput = document.getElementById(`qty-${index}`);
+    let newQty = parseInt(qtyInput.value) + change;
+    newQty = Math.max(0, Math.min(999, newQty));
+    qtyInput.value = newQty;
+    updateQuantity(index);
+}
+
+function updateQuantity(index) {
+    const qtyInput = document.getElementById(`qty-${index}`);
+    const addBtn = document.getElementById(`add-btn-${index}`);
+    const qty = parseInt(qtyInput.value);
+    
+    addBtn.disabled = qty <= 0;
+    if (qty > 0) {
+        addBtn.innerHTML = `<i class="fas fa-plus"></i> Add ${qty}`;
+    } else {
+        addBtn.innerHTML = '<i class="fas fa-plus"></i> Add';
+    }
+}
+
+function addToLiveOrder(index) {
+    const product = products[index];
+    const qty = parseInt(document.getElementById(`qty-${index}`).value);
+    
+    if (qty <= 0) return;
+    
+    // Check if product already in order
+    const existingIndex = liveOrder.findIndex(item => item.id === product.id);
+    
+    if (existingIndex >= 0) {
+        liveOrder[existingIndex].quantity += qty;
+    } else {
+        liveOrder.push({
+            id: product.id,
+            name: product.name,
+            code: product.code || '',
+            price: product.price,
+            quantity: qty
+        });
+    }
+    
+    // Reset quantity input
+    document.getElementById(`qty-${index}`).value = 0;
+    updateQuantity(index);
+    
+    // Update live order display
+    updateLiveOrderDisplay();
+    
+    // Visual feedback - highlight the product card
+    const card = document.getElementById(`product-${index + 1}`);
+    card.style.backgroundColor = '#d4edda';
+    card.style.transform = 'scale(1.02)';
+    card.style.transition = 'all 0.3s ease';
+    
+    // Also add pulse animation
+    card.classList.add('pulse-green');
+    
+    setTimeout(() => {
+        card.style.backgroundColor = '';
+        card.style.transform = '';
+        card.classList.remove('pulse-green');
+    }, 800);
+    
+    // Show success message
+    showToast(`Added ${qty} × ${product.name} to order`, 'success');
+}
+
+function removeFromLiveOrder(index) {
+    const removedItem = liveOrder[index];
+    liveOrder.splice(index, 1);
+    updateLiveOrderDisplay();
+    showToast(`Removed ${removedItem.name} from order`, 'info');
+}
+
+function updateItemQuantity(index, newQty) {
+    if (newQty <= 0) {
+        removeFromLiveOrder(index);
+    } else {
+        liveOrder[index].quantity = newQty;
+        updateLiveOrderDisplay();
+    }
+}
+
+function updateLiveOrderDisplay() {
+    const container = document.getElementById('live-order-items');
+    const emptyOrder = document.getElementById('empty-order');
+    const itemCount = document.getElementById('item-count');
+    const totalItems = document.getElementById('total-items');
+    const totalQuantity = document.getElementById('total-quantity');
+    const totalAmount = document.getElementById('total-amount');
+    const createPoBtn = document.getElementById('create-po-btn');
+    const createInvoiceBtn = document.getElementById('create-invoice-btn');
+    
+    if (liveOrder.length === 0) {
+        emptyOrder.style.display = 'block';
+        container.innerHTML = '';
+        container.appendChild(emptyOrder);
+        itemCount.textContent = '0 items';
+        totalItems.textContent = '0';
+        totalQuantity.textContent = '0';
+        totalAmount.textContent = `${currency} 0.00`;
+        createPoBtn.disabled = true;
+        createInvoiceBtn.disabled = true;
+        return;
+    }
+    
+    emptyOrder.style.display = 'none';
+    
+    let html = '';
+    let totalQty = 0;
+    let totalPrice = 0;
+    
+    liveOrder.forEach((item, index) => {
+        const itemTotal = item.price * item.quantity;
+        totalQty += item.quantity;
+        totalPrice += itemTotal;
+        
+        html += `
+            <div class="border-bottom pb-2 mb-2 order-item" data-item-index="${index}">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div style="flex: 1;">
+                        <strong>${item.name}</strong>
+                        ${item.code ? `<br><small class="text-muted">Code: ${item.code}</small>` : ''}
+                        <br><small>${currency} ${item.price.toFixed(2)} each</small>
+                    </div>
+                    <div class="text-end">
+                        <div class="input-group input-group-sm mb-1" style="width: 90px;">
+                            <button class="btn btn-outline-secondary btn-sm" onclick="updateItemQuantity(${index}, ${item.quantity - 1})" title="Decrease quantity">-</button>
+                            <input type="text" class="form-control form-control-sm text-center" value="${item.quantity}" readonly style="max-width: 40px;">
+                            <button class="btn btn-outline-secondary btn-sm" onclick="updateItemQuantity(${index}, ${item.quantity + 1})" title="Increase quantity">+</button>
+                        </div>
+                        <small class="text-success fw-bold">${currency} ${itemTotal.toFixed(2)}</small>
+                        <br><button class="btn btn-outline-danger btn-sm mt-1" onclick="removeFromLiveOrder(${index})" title="Remove item">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+    itemCount.textContent = `${liveOrder.length} item${liveOrder.length !== 1 ? 's' : ''}`;
+    totalItems.textContent = liveOrder.length;
+    totalQuantity.textContent = totalQty;
+    totalAmount.textContent = `${currency} ${totalPrice.toFixed(2)}`;
+    createPoBtn.disabled = false;
+    createInvoiceBtn.disabled = false;
+    
+    // Update create button text with totals
+    createPoBtn.innerHTML = `<i class="fas fa-file-invoice"></i> Create PO (${liveOrder.length} items, ${currency} ${totalPrice.toFixed(2)})`;
+    createInvoiceBtn.innerHTML = `<i class="fas fa-receipt"></i> Create Invoice (${liveOrder.length} items, ${currency} ${totalPrice.toFixed(2)})`;
+}
+
+function clearOrder() {
+    if (liveOrder.length === 0) return;
+    
+    if (confirm('Are you sure you want to clear the order?')) {
+        liveOrder = [];
+        updateLiveOrderDisplay();
+        showToast('Order cleared', 'warning');
+    }
+}
+
+function createOrder(type) {
+    if (liveOrder.length === 0) {
+        showToast('Please add items to the order first.', 'error');
+        return;
+    }
+    
+    // Prepare order data
+    const orderData = {
+        ...vendorData,
+        products: liveOrder
+    };
+    
+    // Show loading state
+    const btn = type === 'po' ? document.getElementById('create-po-btn') : document.getElementById('create-invoice-btn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+    btn.disabled = true;
+    
+    // Create a form and submit
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/create';
+    
+    const typeInput = document.createElement('input');
+    typeInput.type = 'hidden';
+    typeInput.name = 'create_type';
+    typeInput.value = type;
+    form.appendChild(typeInput);
+    
+    const dataInput = document.createElement('input');
+    dataInput.type = 'hidden';
+    dataInput.name = 'validated_data';
+    dataInput.value = JSON.stringify(orderData);
+    form.appendChild(dataInput);
+    
+    document.body.appendChild(form);
+    form.submit();
+}
+
+function showToast(message, type = 'info') {
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    toast.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Auto remove after 3 seconds
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+        }
+    }, 3000);
+}
+
+// Initialize
+updateLiveOrderDisplay();
+
+// Initialize quantity update buttons
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize all quantity inputs
+    products.forEach((product, index) => {
+        updateQuantity(index);
+    });
+});
+</script>
+
+<style>
+.sticky-top {
+    top: 20px;
+}
+
+.product-card {
+    transition: all 0.3s ease;
+}
+
+.product-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+@keyframes pulse-green {
+    0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+}
+
+.pulse-green {
+    animation: pulse-green 0.6s;
+}
+
+.order-item {
+    transition: background-color 0.3s ease;
+}
+
+.order-item:hover {
+    background-color: rgba(0,0,0,0.05);
+    border-radius: 5px;
+    padding: 5px;
+}
+</style>
+{% endblock %}

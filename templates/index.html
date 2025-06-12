@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Extract Text - Odoo Integration{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="fas fa-file-image"></i> Document Text Extraction</h4>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Upload an invoice or purchase order image to extract and process the data.</p>
+                
+                <form method="POST" action="/extract" enctype="multipart/form-data" class="mb-4">
+                    <div class="mb-3">
+                        <label for="image" class="form-label">Select Image File</label>
+                        <input type="file" class="form-control" name="image" id="image" accept="image/*" required>
+                        <div class="form-text">Supported formats: JPG, PNG, PDF</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-magic"></i> Extract Text
+                    </button>
+                </form>
+
+                {% if extracted_text %}
+                <div class="card mt-4">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="fas fa-check-circle"></i> Extracted Text</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-light">
+                            <pre style="white-space: pre-wrap;">{{ extracted_text }}</pre>
+                        </div>
+                        
+                        <form method="POST" action="/confirm">
+                            <input type="hidden" name="extracted_text" value="{{ extracted_text }}">
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-arrow-right"></i> Process & Validate
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
